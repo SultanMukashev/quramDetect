@@ -4,8 +4,6 @@ import base64
 from flask import Flask, request, jsonify
 import openai
 import ast
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
 
 # Configure OpenAI API
 openai.api_key = os.getenv("OPENAI_API_KEY")
