@@ -34,6 +34,6 @@ COPY --from=builder /app /app
 # Command to run your application
 # CMD ["python"," /app/telegram_bot/aiogram_run.py"]
 # CMD ["ls", "-la", "/app/telegram_bot"]
-
+EXPOSE 5000
 CMD ["python", "/app/detector.py"]
 
