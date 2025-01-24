@@ -57,6 +57,7 @@ def process_images():
 
                 # Extract response text from OpenAI API
                 text = response.choices[0].message.content
+                result = []
                 result += ast.literal_eval(text)
             except Exception as e:
                 return jsonify({"error": f"Error processing image {image_file.filename}: {str(e)}"}), 500
@@ -64,7 +65,7 @@ def process_images():
         # Save the merged text to a file
         output_file_path = "output_texts.txt"
         with open(output_file_path, "w", encoding="utf-8") as output_file:
-            output_file.write(result.join(", "))
+            output_file.write(", ".join(result))
 
         return jsonify({
             "result": result,
