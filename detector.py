@@ -2,14 +2,24 @@ import os
 from dotenv import load_dotenv
 import base64
 from flask import Flask, request, jsonify
+from pymongo import MongoClient
+from bson import ObjectId
 import openai
 import ast
 import re 
+import datetime
 from fuzzywuzzy import fuzz 
 
 # Configure OpenAI API
 openai.api_key = os.getenv("OPENAI_API_KEY")
+mongo_uri = os.getenv("MONGO_URI")
+db_name = os.getenv("MONGO_INITDB_DATABASE")
+collection_name = os.getenv("MONGO_INITDB_COLLECTION")
 
+
+client = MongoClient(mongo_uri)
+db = client[str(db_name)]
+collection = db[str(collection_name)]  # Коллекция для хранения информации о продуктах
 # Initialize Flask app
 app = Flask(__name__)
 
@@ -107,6 +117,7 @@ def check():
         is_kumandi = False  
         is_haram = False 
         response = ""
+        result = []
 
         def matches(element, reference_list): 
             """Проверяет, есть ли элемент в списке с учетом вариаций написания.""" 
@@ -126,27 +137,64 @@ def check():
     
         for element in to_check: 
             if matches(element, all_kumandi): 
-                response+=f"\n{element} - күмәнді"
+                result.append({"name": element, "result": "kymandy"})
                 is_kumandi = True 
             elif matches(element, all_haram): 
-                response+=f"\n{element} - харам"
+                result.append({"name": element, "result": "haram"})
                 is_haram = True 
+            else:
+                result.append({"name": element, "result": "taza"})
         
-        if is_haram: 
-            response+="\nТауар адал емес" 
-        elif is_kumandi: 
-            response+="\nТауардың құрамында күмәнді қоспалар бар" 
-        else: 
-            response+="\nТауардың құрамы таза"
+        # if is_haram: 
+        #     response+="\nТауар адал емес" 
+        # elif is_kumandi: 
+        #     response+="\nТауардың құрамында күмәнді қоспалар бар" 
+        # else: 
+        #     response+="\nТауардың құрамы таза"
 
         print(response)
         return jsonify({
-            "result": response
+            "result": result
         })
 
     except Exception as e:
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
     
+
+@app.route('/approve', methods=['POST'])
+def approve():
+    try:
+        # Получаем данные из запроса
+        data = request.json
+        barcode = data.get('barcode')
+        image = data.get('image')  # Ожидается base64 строка
+        category = data.get('category')
+        ingredients = data.get('ingredients')  # Состав продукта
+        halal = data.get('halal')  # Халяльность состава (True/False)
+
+        if not barcode or not image or not category or not ingredients or halal is None:
+            return jsonify({"error": "Все поля обязательны"}), 400
+
+        # Декодирование изображения из base64
+        image_data = base64.b64decode(image)
+
+        # Сохранение данных в MongoDB
+        product = {
+            "_id": barcode,
+            "image": image_data,  
+            "category": category,
+            "ingredients": ingredients,
+            "halal": halal,
+            "created_at": datetime.datetime.utcnow()
+        }
+
+        # Вставка продукта в коллекцию MongoDB
+        collection.insert_one(product)
+
+        return jsonify({"message": "Продукт успешно добавлен"}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Ошибка: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True)
