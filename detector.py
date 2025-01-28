@@ -1,14 +1,13 @@
-import os
-from dotenv import load_dotenv
-import base64
-from flask import Flask, request, jsonify
-from pymongo import MongoClient
-from bson import ObjectId
-import openai
 import ast
-import re 
+import base64
 import datetime
-from fuzzywuzzy import fuzz 
+import os
+import re
+import openai
+from bson import ObjectId
+from flask import Flask, request, jsonify
+from fuzzywuzzy import fuzz
+from pymongo import MongoClient
 
 # Configure OpenAI API
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -19,8 +18,7 @@ collection_name = os.getenv("MONGO_INITDB_COLLECTION")
 
 client = MongoClient(mongo_uri)
 db = client[str(db_name)]
-collection = db[str(collection_name)]  # Коллекция для хранения информации о продуктах
-# Initialize Flask app
+collection = db[str(collection_name)]
 app = Flask(__name__)
 
 @app.route('/process-images', methods=['POST'])
@@ -175,10 +173,8 @@ def approve():
         if not barcode or not image or not category or not ingredients or halal is None:
             return jsonify({"error": "Все поля обязательны"}), 400
 
-        # Декодирование изображения из base64
         image_data = base64.b64decode(image)
 
-        # Сохранение данных в MongoDB
         product = {
             "_id": barcode,
             "image": image_data,  
@@ -188,13 +184,44 @@ def approve():
             "created_at": datetime.datetime.utcnow()
         }
 
-        # Вставка продукта в коллекцию MongoDB
         collection.insert_one(product)
 
         return jsonify({"message": "Продукт успешно добавлен"}), 200
 
     except Exception as e:
         return jsonify({"error": f"Ошибка: {str(e)}"}), 500
+
+
+@app.route('/product/<string:product_id>', methods=['GET'])
+def get_product_by_id(product_id):
+    """Получить продукт по ID."""
+    try:
+        if not ObjectId.is_valid(product_id):
+            return jsonify({"error": f"Invalid product ID format: {product_id}"}), 400
+
+        product = collection.find_one({"_id": ObjectId(product_id)})
+
+        if not product:
+            return jsonify({"error": f"Product with ID {product_id} not found"}), 404
+
+        product['_id'] = str(product['_id'])
+        return jsonify(product), 200
+    except Exception as e:
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+@app.route('/products', methods=['GET'])
+def get_all_products():
+    """Получить все продукты."""
+    try:
+        products = list(collection.find())
+
+        for product in products:
+            product['_id'] = str(product['_id'])
+
+        return jsonify(products), 200
+    except Exception as e:
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True)
